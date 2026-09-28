@@ -28,30 +28,30 @@ static int _mail_answer(struct Ecbm* ecbm, uint8_t const* packet, uint16_t size)
 static int _handle_frame(struct Ecbm* ecbm, uint16_t size);
 
 enum {
-    ECBM__PD_DIR_MASK = 0x80,
-    ECBM__PD_DIR_IS_REQ = 0x80,
-    ECBM__PD_TYPE_MASK = 0x0F,
-    ECBM__PD_TYPE_WRITE = 0x00,
-    ECBM__PD_TYPE_WRITE_NO_ANSW = 0x01,
-    ECBM__PD_TYPE_READ = 0x02,
-    ECBM__PD_TYPE_PUB_DATA = 0x03,
-    ECBM__PD_TYPE_APP_ERR = 0x0E,
-    ECBM__PD_TYPE_PROTO_ERR = 0x0F,
+    PD_DIR_MASK = 0x80,
+    PD_DIR_IS_REQ = 0x80,
+    PD_TYPE_MASK = 0x0F,
+    PD_TYPE_WRITE = 0x00,
+    PD_TYPE_WRITE_NO_ANSW = 0x01,
+    PD_TYPE_READ = 0x02,
+    PD_TYPE_PUB_DATA = 0x03,
+    PD_TYPE_APP_ERR = 0x0E,
+    PD_TYPE_PROTO_ERR = 0x0F,
 
-    ECBM__PACKET_PD_POS = 0,
-    ECBM__PACKET_ADDR_POS = 1,
-    ECBM__PACKET_TID_POS = 2,
-    ECBM__PACKET_DATA_ID_POS = 4,
-    ECBM__PACKET_PAYLOAD_POS = 6,
-    ECBM__CRC_SIZE = 4,
+    PACKET_PD_POS = 0,
+    PACKET_ADDR_POS = 1,
+    PACKET_TID_POS = 2,
+    PACKET_DATA_ID_POS = 4,
+    PACKET_PAYLOAD_POS = 6,
+    CRC_SIZE = 4,
 
-    ECBM__READ_CHUNK_SIZE = 32,
-    ECBM__SLEEP_MS = 1,
+    READ_CHUNK_SIZE = 32,
+    SLEEP_MS = 1,
 };
 
 enum EcbmAnswerState {
-    ECBM__ANSWER_STATE__EMPTY = 0,
-    ECBM__ANSWER_STATE__FULL = 1,
+    ANSWER_STATE__EMPTY = 0,
+    ANSWER_STATE__FULL = 1,
 };
 
 static uint16_t _alloc_tid(struct Ecbm* const ecbm) {
@@ -78,19 +78,19 @@ static int _build_frame(struct Ecbm* const ecbm, uint8_t const pd, EcbmAddr cons
     int rc = 0;
 
     uint8_t* const buf = ecbm->tx_buf;
-    buf[ECBM__PACKET_PD_POS] = pd;
-    buf[ECBM__PACKET_ADDR_POS] = addr;
-    u16_to_le(&buf[ECBM__PACKET_TID_POS], tid);
-    u16_to_le(&buf[ECBM__PACKET_DATA_ID_POS], data_id);
+    buf[PACKET_PD_POS] = pd;
+    buf[PACKET_ADDR_POS] = addr;
+    u16_to_le(&buf[PACKET_TID_POS], tid);
+    u16_to_le(&buf[PACKET_DATA_ID_POS], data_id);
 
     if ((NULL != payload) && (0 < payload_size)) {
-        memmove(&buf[ECBM__PACKET_PAYLOAD_POS], payload, payload_size);
+        memmove(&buf[PACKET_PAYLOAD_POS], payload, payload_size);
     }
 
-    uint16_t const crc_pos = ECBM__PACKET_PAYLOAD_POS + payload_size;
+    uint16_t const crc_pos = PACKET_PAYLOAD_POS + payload_size;
     u32_to_le(&buf[crc_pos], crc32__ieee(buf, crc_pos));
 
-    uint16_t const packet_size = crc_pos + ECBM__CRC_SIZE;
+    uint16_t const packet_size = crc_pos + CRC_SIZE;
     int const frame_size = framer7b__encode_in_place(buf, packet_size, sizeof(ecbm->tx_buf));
     ASSERTf(0 < frame_size, ER_1, "Fail to encode request packet: %i", frame_size);
 
@@ -120,7 +120,7 @@ static int _pump_tx(struct Ecbm* const ecbm, uint64_t const deadline) {
                 rc = ER_TIMEDOUT;
                 goto finally;
             }
-            ecbm->sleep_ms(ECBM__SLEEP_MS);
+            ecbm->sleep_ms(SLEEP_MS);
             continue;
         }
         ASSERTf(nwritten <= (int)(ecbm->send_total - ecbm->send_ptr), ER_PROTO_INTERNAL,
@@ -151,7 +151,7 @@ static int _send_all(struct Ecbm* const ecbm, uint64_t const deadline) {
                     rc = ER_TIMEDOUT;
                     goto finally;
                 }
-                ecbm->sleep_ms(ECBM__SLEEP_MS);
+                ecbm->sleep_ms(SLEEP_MS);
                 break;
             case ECBM_WRITE_STATUS__FAILED:
                 rc = ER_IO;
@@ -190,10 +190,10 @@ static bool _process_answer(struct Ecbm* const ecbm, struct EcbmTransaction cons
         goto finally;
     }
 
-    uint8_t const type = pkt[ECBM__PACKET_PD_POS] & ECBM__PD_TYPE_MASK;
-    EcbmAddr const addr = pkt[ECBM__PACKET_ADDR_POS];
-    uint16_t const tid = u16_from_le(&pkt[ECBM__PACKET_TID_POS]);
-    EcbmDataId const data_id = u16_from_le(&pkt[ECBM__PACKET_DATA_ID_POS]);
+    uint8_t const type = pkt[PACKET_PD_POS] & PD_TYPE_MASK;
+    EcbmAddr const addr = pkt[PACKET_ADDR_POS];
+    uint16_t const tid = u16_from_le(&pkt[PACKET_TID_POS]);
+    EcbmDataId const data_id = u16_from_le(&pkt[PACKET_DATA_ID_POS]);
     uint16_t const payload_size = size - ECBM__MIN_PACKET_SIZE;
 
     if ((addr != tr->addr) || (tid != tr->tid) || (data_id != tr->data_id)) {
@@ -203,18 +203,18 @@ static bool _process_answer(struct Ecbm* const ecbm, struct EcbmTransaction cons
 
     is_completed = true;
 
-    if ((ECBM__PD_TYPE_APP_ERR == type) || (ECBM__PD_TYPE_PROTO_ERR == type)) {
+    if ((PD_TYPE_APP_ERR == type) || (PD_TYPE_PROTO_ERR == type)) {
         if (0 == payload_size) {
             LOG_DBGf("Error answer with empty payload: type=%u", type);
             *result = ER_PROTO;
         }
         else {
             // The APP_ERR description tail is not returned, see the API doc.
-            *result = pkt[ECBM__PACKET_PAYLOAD_POS];
+            *result = pkt[PACKET_PAYLOAD_POS];
         }
     }
-    else if (((tr->is_read) && (ECBM__PD_TYPE_READ == type)) ||
-        ((!tr->is_read) && (ECBM__PD_TYPE_WRITE == type))) {
+    else if (((tr->is_read) && (PD_TYPE_READ == type)) ||
+        ((!tr->is_read) && (PD_TYPE_WRITE == type))) {
         if ((!tr->is_read) && (0 < payload_size)) {
             LOG_DBGf("WRITE answer with non-empty payload: %u", payload_size);
             *result = ER_PROTO;
@@ -228,7 +228,7 @@ static bool _process_answer(struct Ecbm* const ecbm, struct EcbmTransaction cons
                 *result = ER_ENT_TOO_BIG;
             }
             else if (0 < payload_size) {
-                memmove(tr->buf, &pkt[ECBM__PACKET_PAYLOAD_POS], payload_size);
+                memmove(tr->buf, &pkt[PACKET_PAYLOAD_POS], payload_size);
             }
         }
     }
@@ -239,7 +239,7 @@ static bool _process_answer(struct Ecbm* const ecbm, struct EcbmTransaction cons
 
  finally:
 
-    _answer_state_store(ecbm, ECBM__ANSWER_STATE__EMPTY);
+    _answer_state_store(ecbm, ANSWER_STATE__EMPTY);
 
     return is_completed;
 }
@@ -248,7 +248,7 @@ static int _wait_answer(struct Ecbm* const ecbm, struct EcbmTransaction const* c
     int rc = 0;
 
     while (true) {
-        if (ECBM__ANSWER_STATE__FULL == _answer_state_load(ecbm)) {
+        if (ANSWER_STATE__FULL == _answer_state_load(ecbm)) {
             if (_process_answer(ecbm, tr, &rc)) {
                 goto finally;
             }
@@ -260,7 +260,7 @@ static int _wait_answer(struct Ecbm* const ecbm, struct EcbmTransaction const* c
             goto finally;
         }
 
-        ecbm->sleep_ms(ECBM__SLEEP_MS);
+        ecbm->sleep_ms(SLEEP_MS);
     }
 
  finally:
@@ -274,7 +274,7 @@ static int _transaction(struct Ecbm* const ecbm, struct EcbmTransaction const* c
 
     ecbm->is_in_transaction = true;
 
-    TRY(_build_frame(ecbm, ECBM__PD_DIR_IS_REQ | pd_type, tr->addr, tr->tid, tr->data_id, payload, payload_size));
+    TRY(_build_frame(ecbm, PD_DIR_IS_REQ | pd_type, tr->addr, tr->tid, tr->data_id, payload, payload_size));
 
     for (int attempt = 0; attempt <= retries; attempt++) {
         uint64_t const deadline = ecbm->get_time_ms() + timeout_ms;
@@ -314,14 +314,14 @@ static int _transaction(struct Ecbm* const ecbm, struct EcbmTransaction const* c
 static int _mail_answer(struct Ecbm* const ecbm, uint8_t const* const packet, uint16_t const size) {
     int rc = 0;
 
-    if (ECBM__ANSWER_STATE__FULL == _answer_state_load(ecbm)) {
+    if (ANSWER_STATE__FULL == _answer_state_load(ecbm)) {
         LOG_DBG("Drop answer, the mailbox is busy");
         goto finally;
     }
 
     memmove(ecbm->answer_buf, packet, size);
     ecbm->answer_size = size;
-    _answer_state_store(ecbm, ECBM__ANSWER_STATE__FULL);
+    _answer_state_store(ecbm, ANSWER_STATE__FULL);
 
  finally:
 
@@ -338,7 +338,7 @@ static int _handle_frame(struct Ecbm* const ecbm, uint16_t const size) {
         goto finally;
     }
 
-    uint16_t const body_size = size - ECBM__CRC_SIZE;
+    uint16_t const body_size = size - CRC_SIZE;
     uint32_t const crc_recv = u32_from_le(&buf[body_size]);
     uint32_t const crc_calc = crc32__ieee(buf, body_size);
     if (crc_recv != crc_calc) {
@@ -346,19 +346,19 @@ static int _handle_frame(struct Ecbm* const ecbm, uint16_t const size) {
         goto finally;
     }
 
-    uint8_t const pd = buf[ECBM__PACKET_PD_POS];
-    if (ECBM__PD_DIR_IS_REQ == (pd & ECBM__PD_DIR_MASK)) {
+    uint8_t const pd = buf[PACKET_PD_POS];
+    if (PD_DIR_IS_REQ == (pd & PD_DIR_MASK)) {
         LOG_DBGf("Drop packet, request direction: pd=%02X", pd);
         goto finally;
     }
 
-    EcbmAddr const addr = buf[ECBM__PACKET_ADDR_POS];
-    EcbmDataId const data_id = u16_from_le(&buf[ECBM__PACKET_DATA_ID_POS]);
-    uint8_t const type = pd & ECBM__PD_TYPE_MASK;
+    EcbmAddr const addr = buf[PACKET_ADDR_POS];
+    EcbmDataId const data_id = u16_from_le(&buf[PACKET_DATA_ID_POS]);
+    uint8_t const type = pd & PD_TYPE_MASK;
 
-    if (ECBM__PD_TYPE_PUB_DATA == type) {
+    if (PD_TYPE_PUB_DATA == type) {
         if (NULL != ecbm->pub_handler) {
-            ecbm->pub_handler(addr, data_id, &buf[ECBM__PACKET_PAYLOAD_POS], body_size - ECBM__PACKET_PAYLOAD_POS,
+            ecbm->pub_handler(addr, data_id, &buf[PACKET_PAYLOAD_POS], body_size - PACKET_PAYLOAD_POS,
                 ecbm->pub_user_data);
         }
         else {
@@ -388,7 +388,7 @@ int ecbm__init(struct Ecbm* const ecbm, uint64_t (*const get_time_ms)(void),
     ecbm->sleep_ms = sleep_ms;
     ecbm->pub_handler = pub_handler;
     ecbm->pub_user_data = pub_user_data;
-    ecbm->answer_state = ECBM__ANSWER_STATE__EMPTY;
+    ecbm->answer_state = ANSWER_STATE__EMPTY;
 
     TRY(framer7b_receiver__init(&ecbm->framer, ecbm->rx_buf, sizeof(ecbm->rx_buf)));
 
@@ -416,7 +416,7 @@ int ecbm__read(struct Ecbm* const ecbm, EcbmAddr const addr, EcbmDataId const da
     };
 
     // Not TRY: a positive rc is the slave error code result, not a local failure.
-    rc = _transaction(ecbm, &tr, ECBM__PD_TYPE_READ, NULL, 0, timeout_ms, retries);
+    rc = _transaction(ecbm, &tr, PD_TYPE_READ, NULL, 0, timeout_ms, retries);
 
  finally:
 
@@ -444,7 +444,7 @@ int ecbm__write(struct Ecbm* const ecbm, EcbmAddr const addr, EcbmDataId const d
     };
 
     // Not TRY: a positive rc is the slave error code result, not a local failure.
-    rc = _transaction(ecbm, &tr, ECBM__PD_TYPE_WRITE, data, data_size, timeout_ms, retries);
+    rc = _transaction(ecbm, &tr, PD_TYPE_WRITE, data, data_size, timeout_ms, retries);
 
  finally:
 
@@ -459,7 +459,7 @@ int ecbm__write_no_answer(struct Ecbm* const ecbm, EcbmAddr const addr, EcbmData
     ASSERTf(ECBM__MAX_PAYLOAD_SIZE >= data_size, ER_ENT_TOO_BIG, "Payload too big: %u", data_size);
     ASSERT(!ecbm->is_in_transaction, ER_BUSY);
 
-    TRY(_build_frame(ecbm, ECBM__PD_DIR_IS_REQ | ECBM__PD_TYPE_WRITE_NO_ANSW, addr, 0, data_id, data, data_size));
+    TRY(_build_frame(ecbm, PD_DIR_IS_REQ | PD_TYPE_WRITE_NO_ANSW, addr, 0, data_id, data, data_size));
 
     // No deadline: the call blocks only until the transport accepts the frame bytes.
     TRY(_pump_tx(ecbm, UINT64_MAX));
@@ -471,7 +471,7 @@ int ecbm__write_no_answer(struct Ecbm* const ecbm, EcbmAddr const addr, EcbmData
 
 int ecbm__poll(struct Ecbm* const ecbm) {
     int rc = 0;
-    uint8_t chunk[ECBM__READ_CHUNK_SIZE] = {0};
+    uint8_t chunk[READ_CHUNK_SIZE] = {0};
 
     while (true) {
         int const nread = ecbm->read(chunk, sizeof(chunk));
