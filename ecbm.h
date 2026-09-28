@@ -138,7 +138,7 @@ int ecbm__read(
     uint16_t buf_size,
     uint16_t* data_size,
     EcbmTimeoutMs timeout_ms,
-    uint8_t retries) __nonnull((1, 4));
+    uint8_t retries) __nonnull((1, 4, 6));
 
 /** @brief Send a WRITE request and wait for the answer. Blocking, see #ecbm__read.
  *
