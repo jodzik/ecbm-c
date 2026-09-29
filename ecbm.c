@@ -109,18 +109,19 @@ static int _pump_tx(struct Ecbm* const ecbm, uint64_t const deadline) {
     int rc = 0;
 
     while (ecbm->send_ptr < ecbm->send_total) {
-        int const nwritten = ecbm->write(&ecbm->tx_buf[ecbm->send_ptr], ecbm->send_total - ecbm->send_ptr);
+        int const nwritten = ecbm->write(&ecbm->tx_buf[ecbm->send_ptr], ecbm->send_total - ecbm->send_ptr,
+            ecbm->transport_ctx);
         if (0 > nwritten) {
             rc = nwritten;
             LOG_ERRf("Fail to write to transport: %i", nwritten);
             goto finally;
         }
         if (0 == nwritten) {
-            if (ecbm->get_time_ms() >= deadline) {
+            if (ecbm->get_time_ms(ecbm->transport_ctx) >= deadline) {
                 rc = ER_TIMEDOUT;
                 goto finally;
             }
-            ecbm->sleep_ms(SLEEP_MS);
+            ecbm->sleep_ms(SLEEP_MS, ecbm->transport_ctx);
             continue;
         }
         ASSERTf(nwritten <= (int)(ecbm->send_total - ecbm->send_ptr), ER_PROTO_INTERNAL,
@@ -142,16 +143,16 @@ static int _send_all(struct Ecbm* const ecbm, uint64_t const deadline) {
 
     if (NULL != ecbm->get_write_status) {
         while (true) {
-            enum EcbmWriteStatus const status = ecbm->get_write_status();
+            enum EcbmWriteStatus const status = ecbm->get_write_status(ecbm->transport_ctx);
             switch (status) {
             case ECBM_WRITE_STATUS__COMPLETED:
                 goto finally;
             case ECBM_WRITE_STATUS__PROCEEDED:
-                if (ecbm->get_time_ms() >= deadline) {
+                if (ecbm->get_time_ms(ecbm->transport_ctx) >= deadline) {
                     rc = ER_TIMEDOUT;
                     goto finally;
                 }
-                ecbm->sleep_ms(SLEEP_MS);
+                ecbm->sleep_ms(SLEEP_MS, ecbm->transport_ctx);
                 break;
             case ECBM_WRITE_STATUS__FAILED:
                 rc = ER_IO;
@@ -255,12 +256,12 @@ static int _wait_answer(struct Ecbm* const ecbm, struct EcbmTransaction const* c
             continue;
         }
 
-        if (ecbm->get_time_ms() >= deadline) {
+        if (ecbm->get_time_ms(ecbm->transport_ctx) >= deadline) {
             rc = ER_TIMEDOUT;
             goto finally;
         }
 
-        ecbm->sleep_ms(SLEEP_MS);
+        ecbm->sleep_ms(SLEEP_MS, ecbm->transport_ctx);
     }
 
  finally:
@@ -277,7 +278,7 @@ static int _transaction(struct Ecbm* const ecbm, struct EcbmTransaction const* c
     TRY(_build_frame(ecbm, PD_DIR_IS_REQ | pd_type, tr->addr, tr->tid, tr->data_id, payload, payload_size));
 
     for (int attempt = 0; attempt <= retries; attempt++) {
-        uint64_t const deadline = ecbm->get_time_ms() + timeout_ms;
+        uint64_t const deadline = ecbm->get_time_ms(ecbm->transport_ctx) + timeout_ms;
 
         ecbm->send_ptr = 0;
         rc = _send_all(ecbm, deadline);
@@ -374,10 +375,11 @@ static int _handle_frame(struct Ecbm* const ecbm, uint16_t const size) {
     return rc;
 }
 
-int ecbm__init(struct Ecbm* const ecbm, uint64_t (*const get_time_ms)(void),
-    int (*const read)(uint8_t* buf, uint16_t buf_size), int (*const write)(uint8_t const* data, uint16_t ndata),
-    enum EcbmWriteStatus (*const get_write_status)(void), void (*const sleep_ms)(uint32_t ms),
-    EcbmPubHandler const pub_handler, void* const pub_user_data) {
+int ecbm__init(struct Ecbm* const ecbm, uint64_t (*const get_time_ms)(void* ctx),
+    int (*const read)(uint8_t* buf, uint16_t buf_size, void* ctx),
+    int (*const write)(uint8_t const* data, uint16_t ndata, void* ctx),
+    enum EcbmWriteStatus (*const get_write_status)(void* ctx), void (*const sleep_ms)(uint32_t ms, void* ctx),
+    EcbmPubHandler const pub_handler, void* const pub_user_data, void* const transport_ctx) {
     int rc = 0;
 
     memset(ecbm, 0, sizeof(*ecbm));
@@ -388,6 +390,7 @@ int ecbm__init(struct Ecbm* const ecbm, uint64_t (*const get_time_ms)(void),
     ecbm->sleep_ms = sleep_ms;
     ecbm->pub_handler = pub_handler;
     ecbm->pub_user_data = pub_user_data;
+    ecbm->transport_ctx = transport_ctx;
     ecbm->answer_state = ANSWER_STATE__EMPTY;
 
     TRY(framer7b_receiver__init(&ecbm->framer, ecbm->rx_buf, sizeof(ecbm->rx_buf)));
@@ -474,7 +477,7 @@ int ecbm__poll(struct Ecbm* const ecbm) {
     uint8_t chunk[READ_CHUNK_SIZE] = {0};
 
     while (true) {
-        int const nread = ecbm->read(chunk, sizeof(chunk));
+        int const nread = ecbm->read(chunk, sizeof(chunk), ecbm->transport_ctx);
         if (0 > nread) {
             rc = nread;
             LOG_ERRf("Fail to read from transport: %i", nread);

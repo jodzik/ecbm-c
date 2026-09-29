@@ -60,15 +60,17 @@ typedef struct Ecbm {
     uint16_t tid; // transaction_id counter, wraps 65535 to 1, value 0 is not used
     bool is_in_transaction;
 
-    // Callbacks.
+    // Callbacks. The transport callbacks receive transport_ctx in the last
+    // parameter, get_time_ms/sleep_ms may be called from both contexts.
 
+    void* transport_ctx;
     EcbmPubHandler pub_handler;
     void* pub_user_data;
-    int (*read)(uint8_t* buf, uint16_t buf_size);
-    int (*write)(uint8_t const* data, uint16_t ndata);
-    uint64_t (*get_time_ms)(void);
-    enum EcbmWriteStatus (*get_write_status)(void); // optional, NULL if transport write is synchronous
-    void (*sleep_ms)(uint32_t ms);
+    int (*read)(uint8_t* buf, uint16_t buf_size, void* ctx);
+    int (*write)(uint8_t const* data, uint16_t ndata, void* ctx);
+    uint64_t (*get_time_ms)(void* ctx);
+    enum EcbmWriteStatus (*get_write_status)(void* ctx); // optional, NULL if transport write is synchronous
+    void (*sleep_ms)(uint32_t ms, void* ctx);
 } Ecbm;
 
 /** @brief Init ecb master instance.
@@ -98,16 +100,20 @@ typedef struct Ecbm {
  * @param[in] pub_handler optional(may be NULL) handler for the slaves PUB_DATA packets,
  *                   if NULL such packets are dropped.
  * @param[in] pub_user_data - opaque pointer for the pub_handler, may be NULL.
+ * @param[in] transport_ctx - opaque pointer passed as the last parameter to all the
+ *                   transport callbacks, allows one static transport implementation to
+ *                   serve multiple instances, may be NULL.
  */
 int ecbm__init(
     struct Ecbm* ecbm,
-    uint64_t (*get_time_ms)(void),
-    int (*read)(uint8_t* buf, uint16_t buf_size),
-    int (*write)(uint8_t const* data, uint16_t ndata),
-    enum EcbmWriteStatus (*get_write_status)(void),
-    void (*sleep_ms)(uint32_t ms),
+    uint64_t (*get_time_ms)(void* ctx),
+    int (*read)(uint8_t* buf, uint16_t buf_size, void* ctx),
+    int (*write)(uint8_t const* data, uint16_t ndata, void* ctx),
+    enum EcbmWriteStatus (*get_write_status)(void* ctx),
+    void (*sleep_ms)(uint32_t ms, void* ctx),
     EcbmPubHandler pub_handler,
-    void* pub_user_data) __nonnull((1, 2, 3, 4, 6));
+    void* pub_user_data,
+    void* transport_ctx) __nonnull((1, 2, 3, 4, 6));
 
 /** @brief Send a READ request and wait for the answer. Blocking. On timeout the same
  * request(identical transaction_id, data_id and payload) is resent up to retries times.
