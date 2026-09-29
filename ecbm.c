@@ -3,6 +3,10 @@
 #include <crc32.h>
 #include <byteorder.h>
 
+#ifdef __ZEPHYR__
+LOG_MODULE_REGISTER(ecbm);
+#endif
+
 typedef struct EcbmTransaction {
     EcbmAddr addr;
     EcbmDataId data_id;
