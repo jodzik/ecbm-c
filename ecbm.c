@@ -4,7 +4,8 @@
 #include <byteorder.h>
 
 #ifdef __ZEPHYR__
-LOG_MODULE_REGISTER(ecbm);
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(ecbm, CONFIG_ECBM_LOG_LEVEL);
 #endif
 
 typedef struct EcbmTransaction {
